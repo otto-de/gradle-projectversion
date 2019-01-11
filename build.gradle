@@ -1,3 +1,7 @@
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.Callable
+
 class ProjectVersionPlugin implements Plugin<Project> {
     void apply(Project project) {
         project.extensions.create('projectVersion', ProjectVersionPluginExtension, project)
@@ -11,6 +15,10 @@ abstract class ProjectVersion {
     String toString() {
         getVersion()
     }
+}
+
+interface ProjectVersionResolver {
+    ProjectVersion currentVersion()
 }
 
 class FixedVersion extends ProjectVersion {
@@ -31,6 +39,111 @@ class FixedVersion extends ProjectVersion {
     }
 }
 
+class GitProjectVersionResolver implements ProjectVersionResolver {
+
+    public static final VERSION_PREFIX = "v"
+
+    private final File vcsRoot
+    private final String defaultBranch
+    private final int majorVersion
+
+    private GitProjectVersionResolver(File vcsRoot, String defaultBranch, int majorVersion) {
+        this.vcsRoot = vcsRoot
+        this.defaultBranch = defaultBranch
+        this.majorVersion = majorVersion
+    }
+
+    static GitProjectVersionResolver gitProjectVersionResolver(File vcsRoot,
+                                                               int majorVersion = 0,
+                                                               String defaultBranch = 'master') {
+        new GitProjectVersionResolver(vcsRoot, defaultBranch, majorVersion)
+    }
+
+    static String createTag(String version, File vcsRoot) {
+        def descriptionParts = describeCommit(vcsRoot)
+        if (isUntaggedOrDirty(descriptionParts)) {
+            if (isDirty(descriptionParts)) {
+                throw new IllegalStateException('Workspace is not clean. Please commit your changes first.')
+            }
+            return "git tag ${VERSION_PREFIX}${version}".execute([], vcsRoot).text.trim()
+        }
+        return "tag already exists"
+    }
+
+    static String currentCommitId(File vcsRoot) {
+        return "git rev-parse HEAD".execute([], vcsRoot).text.trim()
+    }
+
+    static String currentBranch(File vcsRoot) {
+        return "git rev-parse --abbrev-ref HEAD".execute([], vcsRoot).text.trim()
+    }
+
+    @Override
+    ProjectVersion currentVersion() {
+        FixedVersion.fixed(nextVersion())
+    }
+
+    private String nextVersion() {
+        List<String> descriptionParts = describeCommit(vcsRoot)
+        def currentVersion = parseVersion(descriptionParts)
+
+        // only increment version number if changes are present to last tagged commit
+        return isUntaggedOrDirty(descriptionParts) ?
+                incrementVersion(currentVersion, !defaultBranch.equals(currentBranch(vcsRoot)), majorVersion) :
+                currentVersion
+    }
+
+    private static List<String> describeCommit(File vcsRoot) {
+        // git describe yields something like v0.1.0-1-g768be9d
+        def description = "git describe --tags --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
+        // initialize to v0.0.0-whoKnows if no tag yet
+        return description.length() == 0 ?
+                ["${VERSION_PREFIX}0.0.0", "whoKnows"] :
+                description.tokenize("-")
+    }
+
+    private static String parseVersion(List<String> descriptionParts) {
+        return descriptionParts[0].substring(VERSION_PREFIX.length())
+    }
+
+    private static boolean isUntaggedOrDirty(List<String> descriptionParts) {
+        return descriptionParts.size() > 1
+    }
+
+    private static boolean isDirty(List<String> descriptionParts) {
+        return descriptionParts[descriptionParts.size() - 1] == 'dirty'
+    }
+
+    private static String incrementVersion(String currentVersion, boolean isPatch, int majorVersion) {
+        def versionParts = currentVersion.tokenize(".")
+        def currentMajorVersion = Integer.valueOf(versionParts[0])
+        def currentMinorVersion = Integer.valueOf(versionParts[1])
+        def currentPatchVersion = Integer.valueOf(versionParts[2])
+
+        // major version -> current sprint number
+        def nextMajorVersion = isPatch ? currentMajorVersion : nextMajor(majorVersion)
+        // minor version -> number of stable commits in current sprint
+        def nextMinorVersion = isPatch ? currentMinorVersion :
+                nextMinor(nextMajorVersion, currentMajorVersion, currentMinorVersion)
+        // patch version -> increase if patch version
+        def nextPatchVersion = isPatch ? currentPatchVersion + 1 : 0
+        return "$nextMajorVersion.$nextMinorVersion.$nextPatchVersion".toString()
+    }
+
+    private static int nextMajor(int majorVersion) {
+        majorVersion < 0 ? 0 : majorVersion
+        //majorVersion < 0 ? sprintNumber(Instant.now()) : majorVersion
+    }
+
+    private static int nextMinor(int nextMajorVersion, int currentMajorVersion, int currentMinorVersion) {
+        nextMajorVersion > currentMajorVersion ? 0 :
+                currentMinorVersion + 1
+    }
+
+//    private static sprintNumber(Instant day) {
+//    }
+}
+
 class ProjectVersionPluginExtension {
     private final Project project
     final Property<ProjectVersion> version
@@ -49,6 +162,11 @@ class ProjectVersionPluginExtension {
         apply()
     }
 
+    void setVersion(ProjectVersionResolver resolver) {
+        this.version.set(resolver.currentVersion())
+        apply()
+    }
+
     private void apply() {
         project.version = getVersion()
     }
@@ -57,7 +175,7 @@ class ProjectVersionPluginExtension {
 apply plugin: ProjectVersionPlugin
 
 projectVersion {
-    version = '0.1.0'
+    version = GitProjectVersionResolver.gitProjectVersionResolver(project.projectDir)
 }
 
 tasks.create('testVersion') {
