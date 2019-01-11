@@ -1,7 +1,3 @@
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.Callable
-
 class ProjectVersionPlugin implements Plugin<Project> {
     void apply(Project project) {
         project.extensions.create('projectVersion', ProjectVersionPluginExtension, project)
@@ -36,6 +32,86 @@ class FixedVersion extends ProjectVersion {
 
     static ProjectVersion defaultVersion() {
         DEFAULT_VERSION
+    }
+}
+
+class SemanticVersion extends ProjectVersion {
+    private final int major
+    private final int minor
+    private final int patch
+    private final boolean released
+
+    private SemanticVersion(int major, int minor, int patch, boolean released) {
+        this.major = major
+        this.minor = minor
+        this.patch = patch
+        this.released = released
+    }
+
+    static SemanticVersion semantic(int major, int minor, int patch, boolean released) {
+        new SemanticVersion(major, minor, patch, released)
+    }
+
+    static SemanticVersion semantic(String version,
+                                    String prefix = '') {
+        def versionParts = trimPrefix(version, prefix).tokenize(".")
+        new SemanticVersion(
+                Integer.valueOf(versionParts[0]),
+                Integer.valueOf(versionParts[1]),
+                Integer.valueOf(versionParts[2]),
+                true)
+    }
+
+    private static String trimPrefix(String str, String prefix) {
+        str.substring(prefix.length())
+    }
+
+    SemanticVersion withMinimumMajor(int minMajor) {
+        minMajor > major ?
+                new SemanticVersion(minMajor, 0, 0, false) :
+                this
+    }
+
+    SemanticVersion nextMinor() {
+        new SemanticVersion(major, minor + 1, 0, false)
+    }
+
+    SemanticVersion nextPatch() {
+        new SemanticVersion(major, minor, patch + 1, false)
+    }
+
+    SemanticVersion withReleased(boolean status) {
+        released == status ? this : new SemanticVersion(major, minor, patch, status)
+    }
+
+    String withPrefix(String prefix) {
+        prefix + toString()
+    }
+
+    @Override
+    protected String getVersion() {
+        released ? "$major.$minor.$patch" : "$major.$minor.$patch-SNAPSHOT"
+    }
+
+    boolean equals(o) {
+        if (this.is(o)) return true
+        if (getClass() != o.class) return false
+
+        SemanticVersion that = (SemanticVersion) o
+
+        if (major != that.major) return false
+        if (minor != that.minor) return false
+        if (patch != that.patch) return false
+
+        return true
+    }
+
+    int hashCode() {
+        int result
+        result = major
+        result = 31 * result + minor
+        result = 31 * result + patch
+        return result
     }
 }
 
@@ -80,16 +156,17 @@ class GitProjectVersionResolver implements ProjectVersionResolver {
 
     @Override
     ProjectVersion currentVersion() {
-        FixedVersion.fixed(nextVersion())
+        nextVersion()
     }
 
-    private String nextVersion() {
+    private SemanticVersion nextVersion() {
         List<String> descriptionParts = describeCommit(vcsRoot)
-        def currentVersion = parseVersion(descriptionParts)
+        def currentVersion = SemanticVersion.semantic(descriptionParts[0], VERSION_PREFIX)
 
         // only increment version number if changes are present to last tagged commit
         return isUntaggedOrDirty(descriptionParts) ?
-                incrementVersion(currentVersion, !defaultBranch.equals(currentBranch(vcsRoot)), majorVersion) :
+                incrementVersion(currentVersion, !defaultBranch.equals(currentBranch(vcsRoot)), majorVersion)
+                .withReleased(!isDirty(descriptionParts)) :
                 currentVersion
     }
 
@@ -98,14 +175,10 @@ class GitProjectVersionResolver implements ProjectVersionResolver {
         def description = "git describe --tags --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
         // initialize to v0.0.0-whoKnows if no tag yet
         return description.length() == 0 ?
-                ["${VERSION_PREFIX}0.0.0", "whoKnows"] :
+                ["${VERSION_PREFIX}0.0.0", "dirty"] :
                 description.tokenize("-")
     }
-
-    private static String parseVersion(List<String> descriptionParts) {
-        return descriptionParts[0].substring(VERSION_PREFIX.length())
-    }
-
+    
     private static boolean isUntaggedOrDirty(List<String> descriptionParts) {
         return descriptionParts.size() > 1
     }
@@ -114,32 +187,17 @@ class GitProjectVersionResolver implements ProjectVersionResolver {
         return descriptionParts[descriptionParts.size() - 1] == 'dirty'
     }
 
-    private static String incrementVersion(String currentVersion, boolean isPatch, int majorVersion) {
-        def versionParts = currentVersion.tokenize(".")
-        def currentMajorVersion = Integer.valueOf(versionParts[0])
-        def currentMinorVersion = Integer.valueOf(versionParts[1])
-        def currentPatchVersion = Integer.valueOf(versionParts[2])
-
-        // major version -> current sprint number
-        def nextMajorVersion = isPatch ? currentMajorVersion : nextMajor(majorVersion)
-        // minor version -> number of stable commits in current sprint
-        def nextMinorVersion = isPatch ? currentMinorVersion :
-                nextMinor(nextMajorVersion, currentMajorVersion, currentMinorVersion)
-        // patch version -> increase if patch version
-        def nextPatchVersion = isPatch ? currentPatchVersion + 1 : 0
-        return "$nextMajorVersion.$nextMinorVersion.$nextPatchVersion".toString()
+    private static SemanticVersion incrementVersion(SemanticVersion currentVersion, boolean isPatch, int majorVersion) {
+        isPatch
+                ? currentVersion.nextPatch()
+                : currentVersion.nextMinor().withMinimumMajor(nextMajor(majorVersion))
     }
 
     private static int nextMajor(int majorVersion) {
         majorVersion < 0 ? 0 : majorVersion
         //majorVersion < 0 ? sprintNumber(Instant.now()) : majorVersion
     }
-
-    private static int nextMinor(int nextMajorVersion, int currentMajorVersion, int currentMinorVersion) {
-        nextMajorVersion > currentMajorVersion ? 0 :
-                currentMinorVersion + 1
-    }
-
+    
 //    private static sprintNumber(Instant day) {
 //    }
 }
