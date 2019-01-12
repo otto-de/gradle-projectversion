@@ -52,18 +52,13 @@ class SemanticVersion extends ProjectVersion {
         new SemanticVersion(major, minor, patch, released)
     }
 
-    static SemanticVersion semantic(String version,
-                                    String prefix = '') {
-        def versionParts = trimPrefix(version, prefix).tokenize(".")
+    static SemanticVersion semantic(String version) {
+        def versionParts = version.tokenize(".")
         new SemanticVersion(
                 Integer.valueOf(versionParts[0]),
                 Integer.valueOf(versionParts[1]),
                 Integer.valueOf(versionParts[2]),
                 true)
-    }
-
-    private static String trimPrefix(String str, String prefix) {
-        str.substring(prefix.length())
     }
 
     SemanticVersion withMinimumMajor(int minMajor) {
@@ -82,10 +77,6 @@ class SemanticVersion extends ProjectVersion {
 
     SemanticVersion withReleased(boolean status) {
         released == status ? this : new SemanticVersion(major, minor, patch, status)
-    }
-
-    String withPrefix(String prefix) {
-        prefix + toString()
     }
 
     @Override
@@ -115,24 +106,63 @@ class SemanticVersion extends ProjectVersion {
     }
 }
 
-class GitProjectVersionResolver implements ProjectVersionResolver {
+interface VersioningStrategy<T extends ProjectVersion> {
+    T nextVersion(T oldVersion)
+}
+
+interface GitTagParser<T extends ProjectVersion> {
+    T parseAsVersion(String versionString)
+}
+
+class SemanticVersioningStrategies {
+
+    static VersioningStrategy<SemanticVersion> defaultStrategy(int major, boolean isPatch) {
+        new VersioningStrategy<SemanticVersion>() {
+            @Override
+            SemanticVersion nextVersion(SemanticVersion oldVersion) {
+                isPatch
+                        ? oldVersion.nextPatch()
+                        : oldVersion.nextMinor().withMinimumMajor(major)
+            }
+
+        }
+    }
+}
+
+class GitProjectVersionResolver<T extends ProjectVersion> implements ProjectVersionResolver {
 
     public static final VERSION_PREFIX = "v"
 
     private final File vcsRoot
-    private final String defaultBranch
-    private final int majorVersion
+    private final GitTagParser<T> gitTagParser
+    private final VersioningStrategy<T> strategy
 
-    private GitProjectVersionResolver(File vcsRoot, String defaultBranch, int majorVersion) {
+    private GitProjectVersionResolver(File vcsRoot,
+                                      GitTagParser<T> gitTagParser,
+                                      VersioningStrategy<T> strategy) {
         this.vcsRoot = vcsRoot
-        this.defaultBranch = defaultBranch
-        this.majorVersion = majorVersion
+        this.gitTagParser = gitTagParser
+        this.strategy = strategy
     }
 
     static GitProjectVersionResolver gitProjectVersionResolver(File vcsRoot,
                                                                int majorVersion = 0,
                                                                String defaultBranch = 'master') {
-        new GitProjectVersionResolver(vcsRoot, defaultBranch, majorVersion)
+        new GitProjectVersionResolver(vcsRoot,
+                { String versionString ->
+                    SemanticVersion.semantic(versionString)
+                },
+                SemanticVersioningStrategies.defaultStrategy(majorVersion, !defaultBranch.equals(currentBranch(vcsRoot)))
+        )
+    }
+
+    static <T extends ProjectVersion> GitProjectVersionResolver<T> gitProjectVersionResolver(
+            File vcsRoot,
+            GitTagParser<T> gitTagParser,
+            VersioningStrategy<T> strategy) {
+        new GitProjectVersionResolver<>(vcsRoot,
+                requireNonNull(gitTagParser),
+                requireNonNull(strategy))
     }
 
     static String createTag(String version, File vcsRoot) {
@@ -155,18 +185,14 @@ class GitProjectVersionResolver implements ProjectVersionResolver {
     }
 
     @Override
-    ProjectVersion currentVersion() {
-        nextVersion()
-    }
-
-    private SemanticVersion nextVersion() {
+    T currentVersion() {
         List<String> descriptionParts = describeCommit(vcsRoot)
-        def currentVersion = SemanticVersion.semantic(descriptionParts[0], VERSION_PREFIX)
+        def currentVersion = gitTagParser.parseAsVersion(descriptionParts[0])
 
         // only increment version number if changes are present to last tagged commit
-        return isUntaggedOrDirty(descriptionParts) ?
-                incrementVersion(currentVersion, !defaultBranch.equals(currentBranch(vcsRoot)), majorVersion)
-                .withReleased(!isDirty(descriptionParts)) :
+        isUntaggedOrDirty(descriptionParts) ?
+                strategy.nextVersion(currentVersion)
+                        .withReleased(!isDirty(descriptionParts)) :
                 currentVersion
     }
 
@@ -175,10 +201,15 @@ class GitProjectVersionResolver implements ProjectVersionResolver {
         def description = "git describe --tags --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
         // initialize to v0.0.0-whoKnows if no tag yet
         return description.length() == 0 ?
-                ["${VERSION_PREFIX}0.0.0", "dirty"] :
-                description.tokenize("-")
+                ["0.0.0", "dirty"] :
+                trimPrefix(description, VERSION_PREFIX).tokenize("-")
     }
-    
+
+
+    private static String trimPrefix(String str, String prefix) {
+        str.substring(prefix.length())
+    }
+
     private static boolean isUntaggedOrDirty(List<String> descriptionParts) {
         return descriptionParts.size() > 1
     }
@@ -187,17 +218,6 @@ class GitProjectVersionResolver implements ProjectVersionResolver {
         return descriptionParts[descriptionParts.size() - 1] == 'dirty'
     }
 
-    private static SemanticVersion incrementVersion(SemanticVersion currentVersion, boolean isPatch, int majorVersion) {
-        isPatch
-                ? currentVersion.nextPatch()
-                : currentVersion.nextMinor().withMinimumMajor(nextMajor(majorVersion))
-    }
-
-    private static int nextMajor(int majorVersion) {
-        majorVersion < 0 ? 0 : majorVersion
-        //majorVersion < 0 ? sprintNumber(Instant.now()) : majorVersion
-    }
-    
 //    private static sprintNumber(Instant day) {
 //    }
 }
@@ -225,6 +245,10 @@ class ProjectVersionPluginExtension {
         apply()
     }
 
+    void deriveFromGitTag() {
+        setVersion(GitProjectVersionResolver.gitProjectVersionResolver(project.projectDir))
+    }
+
     private void apply() {
         project.version = getVersion()
     }
@@ -233,7 +257,7 @@ class ProjectVersionPluginExtension {
 apply plugin: ProjectVersionPlugin
 
 projectVersion {
-    version = GitProjectVersionResolver.gitProjectVersionResolver(project.projectDir)
+    deriveFromGitTag()
 }
 
 tasks.create('testVersion') {
