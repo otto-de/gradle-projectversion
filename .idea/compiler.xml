@@ -4,5 +4,9 @@
     <annotationProcessing>
       <profile default="true" name="Default" enabled="true" />
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="de.otto.find.gradle-projectversion.main" target="1.8" />
+      <module name="de.otto.find.gradle-projectversion.test" target="1.8" />
+    </bytecodeTargetLevel>
   </component>
 </project>

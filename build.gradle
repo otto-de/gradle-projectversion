@@ -1,321 +1,46 @@
-import java.time.Duration
-import java.time.Instant
-
-class GitCommit {
-    private static final VERSION_PREFIX = "v"
-
-    private final File vcsRoot
-
-    private GitCommit(File vcsRoot) {
-        this.vcsRoot = vcsRoot
-    }
-
-    static GitCommit gitCommit(File vcsRoot) {
-        new GitCommit(Objects.requireNonNull(vcsRoot))
-    }
-
-    static GitCommit gitCommit(Project project) {
-        gitCommit(project.projectDir)
-    }
-
-    List<String> describe() {
-        // git describe yields something like v0.1.0-1-g768be9d
-        def description = "git describe --tags --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
-        // initialize to v0.0.0-whoKnows if no tag yet
-        return description.length() == 0 ?
-                ["0.0.0", "notset"] :
-                trimPrefix(description, VERSION_PREFIX).tokenize("-")
-    }
-
-    String tag(Object version) {
-        def descriptionParts = describe()
-        if (isUntaggedOrDirty(descriptionParts)) {
-            if (isDirty(descriptionParts)) {
-                throw new IllegalStateException('Workspace is not clean. Please commit your changes first.')
-            }
-            return "git tag ${VERSION_PREFIX}${version}".execute([], vcsRoot).text.trim()
-        }
-        return "tag already exists"
-
-    }
-
-    String getId() {
-        return "git rev-parse HEAD".execute([], vcsRoot).text.trim()
-    }
-
-    String getBranch() {
-        return "git rev-parse --abbrev-ref HEAD".execute([], vcsRoot).text.trim()
-    }
-
-    boolean isBranch(String branch) {
-        this.branch == branch
-    }
-
-    private static String trimPrefix(String str, String prefix) {
-        str.substring(prefix.length())
-    }
-
-    static boolean isUntaggedOrDirty(List<String> descriptionParts) {
-        return descriptionParts.size() > 1
-    }
-
-    static boolean isDirty(List<String> descriptionParts) {
-        return descriptionParts[descriptionParts.size() - 1] == 'dirty'
-    }
+plugins {
+    id 'java-gradle-plugin'
+    id 'groovy'
+    id 'com.gradle.plugin-publish' version '0.10.0'
 }
 
-class ProjectVersionTag extends DefaultTask {
+group = 'de.otto.find'
+//version = '0.1.0'
+//
+//apply plugin: ProjectVersionPlugin
+//projectVersion {
+//    deriveFromGitTag()
+//}
 
-    @TaskAction
-    void tagVersion() {
-        GitCommit commit = GitCommit.gitCommit(project)
-        logger.quiet commit.tag(project.version)
-    }
+repositories {
+    jcenter()
 }
 
-class ProjectVersionPlugin implements Plugin<Project> {
-    void apply(Project project) {
-        project.extensions.create('projectVersion', ProjectVersionPluginExtension, project)
-
-        project.tasks.create('tagVersion', ProjectVersionTag) {
-            group = 'Publishing'
-            description = 'Tags the current commit with the current project version'
-        }
-    }
-}
-
-abstract class ProjectVersion {
-    protected abstract String getVersion()
-
-    @Override
-    String toString() {
-        getVersion()
-    }
-}
-
-interface ProjectVersionResolver {
-    ProjectVersion currentVersion()
-}
-
-class FixedVersion extends ProjectVersion {
-    private static final ProjectVersion DEFAULT_VERSION = fixed('0.1.0')
-
-    final String version
-
-    private FixedVersion(String version) {
-        this.version = version
-    }
-
-    static ProjectVersion fixed(String version) {
-        new FixedVersion(Objects.requireNonNull(version))
-    }
-
-    static ProjectVersion defaultVersion() {
-        DEFAULT_VERSION
-    }
-}
-
-class SemanticVersion extends ProjectVersion {
-    private final int major
-    private final int minor
-    private final int patch
-    private final boolean released
-
-    private SemanticVersion(int major, int minor, int patch, boolean released) {
-        this.major = major
-        this.minor = minor
-        this.patch = patch
-        this.released = released
-    }
-
-    static SemanticVersion semantic(int major, int minor, int patch, boolean released) {
-        new SemanticVersion(major, minor, patch, released)
-    }
-
-    static SemanticVersion semantic(String version) {
-        def versionParts = version.tokenize(".")
-        new SemanticVersion(
-                Integer.valueOf(versionParts[0]),
-                Integer.valueOf(versionParts[1]),
-                Integer.valueOf(versionParts[2]),
-                true)
-    }
-
-    static int sprintNumber(Instant sprintStart, Duration sprintLength = Duration.ofDays(14), int sprintNumber = 1) {
-        (int) (Duration.between(Instant.now(), sprintStart).toDays() / sprintLength.toDays()) + sprintNumber
-    }
-    
-    SemanticVersion withMinimumMajor(int minMajor) {
-        minMajor > major ?
-                new SemanticVersion(minMajor, 0, 0, false) :
-                this
-    }
-
-    SemanticVersion nextMinor() {
-        new SemanticVersion(major, minor + 1, 0, false)
-    }
-
-    SemanticVersion nextPatch() {
-        new SemanticVersion(major, minor, patch + 1, false)
-    }
-
-    SemanticVersion withReleased(boolean status) {
-        released == status ? this : new SemanticVersion(major, minor, patch, status)
-    }
-
-    @Override
-    protected String getVersion() {
-        released ? "$major.$minor.$patch" : "$major.$minor.$patch-SNAPSHOT"
-    }
-
-    boolean equals(o) {
-        if (this.is(o)) return true
-        if (getClass() != o.class) return false
-
-        SemanticVersion that = (SemanticVersion) o
-
-        if (major != that.major) return false
-        if (minor != that.minor) return false
-        if (patch != that.patch) return false
-
-        return true
-    }
-
-    int hashCode() {
-        int result
-        result = major
-        result = 31 * result + minor
-        result = 31 * result + patch
-        return result
-    }
-}
-
-interface VersioningStrategy<T extends ProjectVersion> {
-    T nextVersion(T oldVersion)
-}
-
-interface GitTagParser<T extends ProjectVersion> {
-    T parseAsVersion(String versionString)
-}
-
-class SemanticVersioningStrategies {
-
-    static VersioningStrategy<SemanticVersion> defaultStrategy(GitCommit gitCommit,
-                                                               int major,
-                                                               String defaultBranch) {
-        def description = gitCommit.describe()
-        def dirty = gitCommit.isDirty(description)
-        gitCommit.isBranch(defaultBranch) ?
-                bumpRegularVersion(major, !dirty) :
-                bumpPatchVersion(!dirty)
-    }
-
-    private static VersioningStrategy<SemanticVersion> bumpRegularVersion(int major, boolean released) {
-        new VersioningStrategy<SemanticVersion>() {
-            @Override
-            SemanticVersion nextVersion(SemanticVersion oldVersion) {
-                oldVersion.nextMinor().withMinimumMajor(major).withReleased(released)
-            }
-
-        }
-    }
-
-    private static VersioningStrategy<SemanticVersion> bumpPatchVersion(boolean released) {
-        new VersioningStrategy<SemanticVersion>() {
-            @Override
-            SemanticVersion nextVersion(SemanticVersion oldVersion) {
-                oldVersion.nextPatch().withReleased(released)
-            }
-        }
-    }
-}
-
-class GitProjectVersionResolver<T extends ProjectVersion> implements ProjectVersionResolver {
-
-    private final GitCommit gitCommit
-    private final GitTagParser<T> gitTagParser
-    private final VersioningStrategy<T> strategy
-
-    private GitProjectVersionResolver(GitCommit gitCommit,
-                                      GitTagParser<T> gitTagParser,
-                                      VersioningStrategy<T> strategy) {
-        this.gitCommit = gitCommit
-        this.gitTagParser = gitTagParser
-        this.strategy = strategy
-    }
-
-    static GitProjectVersionResolver gitProjectVersionResolver(GitCommit gitCommit,
-                                                               int majorVersion = 0,
-                                                               String defaultBranch = 'master') {
-        new GitProjectVersionResolver(gitCommit,
-                { String versionString ->
-                    SemanticVersion.semantic(versionString)
-                },
-                SemanticVersioningStrategies.defaultStrategy(gitCommit, majorVersion, defaultBranch))
-    }
-
-    static <T extends ProjectVersion> GitProjectVersionResolver<T> gitProjectVersionResolver(
-            GitCommit gitCommit,
-            GitTagParser<T> gitTagParser,
-            VersioningStrategy<T> strategy) {
-        new GitProjectVersionResolver<>(gitCommit,
-                Objects.requireNonNull(gitTagParser),
-                Objects.requireNonNull(strategy))
-    }
-
-    @Override
-    T currentVersion() {
-        List<String> descriptionParts = gitCommit.describe()
-        def currentVersion = gitTagParser.parseAsVersion(descriptionParts[0])
-
-        // only increment version number if changes are present to last tagged commit
-        GitCommit.isUntaggedOrDirty(descriptionParts) ?
-                strategy.nextVersion(currentVersion) :
-                currentVersion
-    }
-}
-
-class ProjectVersionPluginExtension {
-    private final Project project
-    final Property<ProjectVersion> version
-
-    ProjectVersionPluginExtension(Project project) {
-        this.project = project
-        version = project.objects.property(ProjectVersion)
-    }
-
-    ProjectVersion getVersion() {
-        version.getOrElse(FixedVersion.defaultVersion())
-    }
-
-    void setVersion(String version) {
-        this.version.set(FixedVersion.fixed(version))
-        apply()
-    }
-
-    void setVersion(ProjectVersionResolver resolver) {
-        this.version.set(resolver.currentVersion())
-        apply()
-    }
-
-    void deriveFromGitTag() {
-        setVersion(GitProjectVersionResolver.gitProjectVersionResolver(GitCommit.gitCommit(project)))
-    }
-
-    private void apply() {
-        project.version = getVersion()
-    }
-}
-
-apply plugin: ProjectVersionPlugin
-
-projectVersion {
-    deriveFromGitTag()
+dependencies {
+//    implementation gradleApi()
+//    implementation localGroovy()
 }
 
 tasks.create('testVersion') {
     doLast {
         println "The project's name    : ${project.name}"
         println "The project's version : ${project.version}"
+    }
+}
+
+pluginBundle {
+    website = 'https://github.com/otto-de/gradle-projectversion'
+    vcsUrl = 'https://github.com/otto-de/gradle-projectversion.git'
+    tags = ['gradle', 'version', 'git']
+}
+
+gradlePlugin {
+    plugins {
+        projectVersion {
+            id = 'de.otto.find.project-version'
+            displayName = 'Auto-Versioning for gradle-built artifacts'
+            description = 'A plugin for deriving the project’s version automatically. Version may stem from git tags, timestamps or similar sources'
+            implementationClass = 'de.otto.find.gradle.projectversion.ProjectVersionPlugin'
+        }
     }
 }
