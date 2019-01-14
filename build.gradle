@@ -5,8 +5,8 @@ plugins {
 }
 
 group = 'de.otto.find'
-//version = '0.1.0'
-//
+version = '0.1.0'
+
 //apply plugin: ProjectVersionPlugin
 //projectVersion {
 //    deriveFromGitTag()
@@ -17,15 +17,6 @@ repositories {
 }
 
 dependencies {
-//    implementation gradleApi()
-//    implementation localGroovy()
-}
-
-tasks.create('testVersion') {
-    doLast {
-        println "The project's name    : ${project.name}"
-        println "The project's version : ${project.version}"
-    }
 }
 
 pluginBundle {
