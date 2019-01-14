@@ -1,6 +1,86 @@
+import java.time.Duration
+import java.time.Instant
+
+class GitCommit {
+    private static final VERSION_PREFIX = "v"
+
+    private final File vcsRoot
+
+    private GitCommit(File vcsRoot) {
+        this.vcsRoot = vcsRoot
+    }
+
+    static GitCommit gitCommit(File vcsRoot) {
+        new GitCommit(Objects.requireNonNull(vcsRoot))
+    }
+
+    static GitCommit gitCommit(Project project) {
+        gitCommit(project.projectDir)
+    }
+
+    List<String> describe() {
+        // git describe yields something like v0.1.0-1-g768be9d
+        def description = "git describe --tags --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
+        // initialize to v0.0.0-whoKnows if no tag yet
+        return description.length() == 0 ?
+                ["0.0.0", "notset"] :
+                trimPrefix(description, VERSION_PREFIX).tokenize("-")
+    }
+
+    String tag(Object version) {
+        def descriptionParts = describe()
+        if (isUntaggedOrDirty(descriptionParts)) {
+            if (isDirty(descriptionParts)) {
+                throw new IllegalStateException('Workspace is not clean. Please commit your changes first.')
+            }
+            return "git tag ${VERSION_PREFIX}${version}".execute([], vcsRoot).text.trim()
+        }
+        return "tag already exists"
+
+    }
+
+    String getId() {
+        return "git rev-parse HEAD".execute([], vcsRoot).text.trim()
+    }
+
+    String getBranch() {
+        return "git rev-parse --abbrev-ref HEAD".execute([], vcsRoot).text.trim()
+    }
+
+    boolean isBranch(String branch) {
+        this.branch == branch
+    }
+
+    private static String trimPrefix(String str, String prefix) {
+        str.substring(prefix.length())
+    }
+
+    static boolean isUntaggedOrDirty(List<String> descriptionParts) {
+        return descriptionParts.size() > 1
+    }
+
+    static boolean isDirty(List<String> descriptionParts) {
+        return descriptionParts[descriptionParts.size() - 1] == 'dirty'
+    }
+}
+
+class ProjectVersionTag extends DefaultTask {
+
+    @TaskAction
+    void tagVersion() {
+        GitCommit commit = GitCommit.gitCommit(project)
+        logger.quiet commit.tag(project.version)
+    }
+}
+
 class ProjectVersionPlugin implements Plugin<Project> {
     void apply(Project project) {
         project.extensions.create('projectVersion', ProjectVersionPluginExtension, project)
+
+        project.tasks.create('tagVersion', ProjectVersionTag) {
+            group = 'Publishing'
+            description = 'Tags the current commit with the current project version'
+        }
     }
 }
 
@@ -61,6 +141,10 @@ class SemanticVersion extends ProjectVersion {
                 true)
     }
 
+    static int sprintNumber(Instant sprintStart, Duration sprintLength = Duration.ofDays(14), int sprintNumber = 1) {
+        (int) (Duration.between(Instant.now(), sprintStart).toDays() / sprintLength.toDays()) + sprintNumber
+    }
+    
     SemanticVersion withMinimumMajor(int minMajor) {
         minMajor > major ?
                 new SemanticVersion(minMajor, 0, 0, false) :
@@ -116,110 +200,79 @@ interface GitTagParser<T extends ProjectVersion> {
 
 class SemanticVersioningStrategies {
 
-    static VersioningStrategy<SemanticVersion> defaultStrategy(int major, boolean isPatch) {
+    static VersioningStrategy<SemanticVersion> defaultStrategy(GitCommit gitCommit,
+                                                               int major,
+                                                               String defaultBranch) {
+        def description = gitCommit.describe()
+        def dirty = gitCommit.isDirty(description)
+        gitCommit.isBranch(defaultBranch) ?
+                bumpRegularVersion(major, !dirty) :
+                bumpPatchVersion(!dirty)
+    }
+
+    private static VersioningStrategy<SemanticVersion> bumpRegularVersion(int major, boolean released) {
         new VersioningStrategy<SemanticVersion>() {
             @Override
             SemanticVersion nextVersion(SemanticVersion oldVersion) {
-                isPatch
-                        ? oldVersion.nextPatch()
-                        : oldVersion.nextMinor().withMinimumMajor(major)
+                oldVersion.nextMinor().withMinimumMajor(major).withReleased(released)
             }
 
+        }
+    }
+
+    private static VersioningStrategy<SemanticVersion> bumpPatchVersion(boolean released) {
+        new VersioningStrategy<SemanticVersion>() {
+            @Override
+            SemanticVersion nextVersion(SemanticVersion oldVersion) {
+                oldVersion.nextPatch().withReleased(released)
+            }
         }
     }
 }
 
 class GitProjectVersionResolver<T extends ProjectVersion> implements ProjectVersionResolver {
 
-    public static final VERSION_PREFIX = "v"
-
-    private final File vcsRoot
+    private final GitCommit gitCommit
     private final GitTagParser<T> gitTagParser
     private final VersioningStrategy<T> strategy
 
-    private GitProjectVersionResolver(File vcsRoot,
+    private GitProjectVersionResolver(GitCommit gitCommit,
                                       GitTagParser<T> gitTagParser,
                                       VersioningStrategy<T> strategy) {
-        this.vcsRoot = vcsRoot
+        this.gitCommit = gitCommit
         this.gitTagParser = gitTagParser
         this.strategy = strategy
     }
 
-    static GitProjectVersionResolver gitProjectVersionResolver(File vcsRoot,
+    static GitProjectVersionResolver gitProjectVersionResolver(GitCommit gitCommit,
                                                                int majorVersion = 0,
                                                                String defaultBranch = 'master') {
-        new GitProjectVersionResolver(vcsRoot,
+        new GitProjectVersionResolver(gitCommit,
                 { String versionString ->
                     SemanticVersion.semantic(versionString)
                 },
-                SemanticVersioningStrategies.defaultStrategy(majorVersion, !defaultBranch.equals(currentBranch(vcsRoot)))
-        )
+                SemanticVersioningStrategies.defaultStrategy(gitCommit, majorVersion, defaultBranch))
     }
 
     static <T extends ProjectVersion> GitProjectVersionResolver<T> gitProjectVersionResolver(
-            File vcsRoot,
+            GitCommit gitCommit,
             GitTagParser<T> gitTagParser,
             VersioningStrategy<T> strategy) {
-        new GitProjectVersionResolver<>(vcsRoot,
-                requireNonNull(gitTagParser),
-                requireNonNull(strategy))
-    }
-
-    static String createTag(String version, File vcsRoot) {
-        def descriptionParts = describeCommit(vcsRoot)
-        if (isUntaggedOrDirty(descriptionParts)) {
-            if (isDirty(descriptionParts)) {
-                throw new IllegalStateException('Workspace is not clean. Please commit your changes first.')
-            }
-            return "git tag ${VERSION_PREFIX}${version}".execute([], vcsRoot).text.trim()
-        }
-        return "tag already exists"
-    }
-
-    static String currentCommitId(File vcsRoot) {
-        return "git rev-parse HEAD".execute([], vcsRoot).text.trim()
-    }
-
-    static String currentBranch(File vcsRoot) {
-        return "git rev-parse --abbrev-ref HEAD".execute([], vcsRoot).text.trim()
+        new GitProjectVersionResolver<>(gitCommit,
+                Objects.requireNonNull(gitTagParser),
+                Objects.requireNonNull(strategy))
     }
 
     @Override
     T currentVersion() {
-        List<String> descriptionParts = describeCommit(vcsRoot)
+        List<String> descriptionParts = gitCommit.describe()
         def currentVersion = gitTagParser.parseAsVersion(descriptionParts[0])
 
         // only increment version number if changes are present to last tagged commit
-        isUntaggedOrDirty(descriptionParts) ?
-                strategy.nextVersion(currentVersion)
-                        .withReleased(!isDirty(descriptionParts)) :
+        GitCommit.isUntaggedOrDirty(descriptionParts) ?
+                strategy.nextVersion(currentVersion) :
                 currentVersion
     }
-
-    private static List<String> describeCommit(File vcsRoot) {
-        // git describe yields something like v0.1.0-1-g768be9d
-        def description = "git describe --tags --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
-        // initialize to v0.0.0-whoKnows if no tag yet
-        return description.length() == 0 ?
-                ["0.0.0", "dirty"] :
-                trimPrefix(description, VERSION_PREFIX).tokenize("-")
-    }
-
-
-    private static String trimPrefix(String str, String prefix) {
-        str.substring(prefix.length())
-    }
-
-    private static boolean isUntaggedOrDirty(List<String> descriptionParts) {
-        return descriptionParts.size() > 1
-    }
-
-    private static boolean isDirty(List<String> descriptionParts) {
-        return descriptionParts[descriptionParts.size() - 1] == 'dirty'
-    }
-
-//    private static sprintNumber(Instant day) {
-//    }
 }
 
 class ProjectVersionPluginExtension {
@@ -246,7 +299,7 @@ class ProjectVersionPluginExtension {
     }
 
     void deriveFromGitTag() {
-        setVersion(GitProjectVersionResolver.gitProjectVersionResolver(project.projectDir))
+        setVersion(GitProjectVersionResolver.gitProjectVersionResolver(GitCommit.gitCommit(project)))
     }
 
     private void apply() {
