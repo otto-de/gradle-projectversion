@@ -2,8 +2,6 @@ package de.otto.find.gradle.projectversion
 
 import org.gradle.internal.Cast
 
-import static de.otto.find.gradle.projectversion.GitCommit.isDirty
-
 class SemanticVersioningStrategy implements VersioningStrategy<SemanticVersion> {
 
     final String branch
@@ -17,7 +15,7 @@ class SemanticVersioningStrategy implements VersioningStrategy<SemanticVersion> 
     static VersioningStrategy<SemanticVersion> semanticVersioningStrategy(GitCommit gitCommit) {
         new SemanticVersioningStrategy(
                 gitCommit.branch,
-                isDirty(gitCommit.describe()))
+                gitCommit.dirty)
     }
 
     @Override
