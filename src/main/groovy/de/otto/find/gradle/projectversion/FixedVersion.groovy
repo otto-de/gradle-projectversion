@@ -16,4 +16,19 @@ final class FixedVersion extends ProjectVersion {
     static ProjectVersion defaultVersion() {
         DEFAULT_VERSION
     }
+
+    boolean equals(o) {
+        if (this.is(o)) return true
+        if (getClass() != o.class) return false
+
+        FixedVersion that = (FixedVersion) o
+
+        if (version != that.version) return false
+
+        return true
+    }
+
+    int hashCode() {
+        return (version != null ? version.hashCode() : 0)
+    }
 }
