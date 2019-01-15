@@ -5,32 +5,37 @@ class GitProjectVersionResolver <T extends ProjectVersion> implements ProjectVer
     private final GitCommit gitCommit
     private final GitTagParser<T> gitTagParser
     private final VersioningStrategy<T> strategy
+    private final VersioningStrategyOptions options
 
     private GitProjectVersionResolver(GitCommit gitCommit,
                                       GitTagParser<T> gitTagParser,
-                                      VersioningStrategy<T> strategy) {
+                                      VersioningStrategy<T> strategy,
+                                      VersioningStrategyOptions options) {
         this.gitCommit = gitCommit
         this.gitTagParser = gitTagParser
         this.strategy = strategy
+        this.options = options
     }
 
-    static GitProjectVersionResolver gitProjectVersionResolver(GitCommit gitCommit,
-                                                               int majorVersion = 0,
-                                                               String defaultBranch = 'master') {
+    static ProjectVersionResolver gitProjectVersionResolver(GitCommit gitCommit) {
         new GitProjectVersionResolver(gitCommit,
                 { String versionString ->
                     SemanticVersion.semantic(versionString)
                 },
-                SemanticVersioningStrategies.defaultStrategy(gitCommit, majorVersion, defaultBranch))
+                SemanticVersioningStrategy.semanticVersioningStrategy(gitCommit),
+                new SemanticVersioningOptions())
     }
 
     static <T extends ProjectVersion> GitProjectVersionResolver<T> gitProjectVersionResolver(
             GitCommit gitCommit,
             GitTagParser<T> gitTagParser,
-            VersioningStrategy<T> strategy) {
+            VersioningStrategy<T> strategy,
+            VersioningStrategyOptions options) {
         new GitProjectVersionResolver<>(gitCommit,
                 Objects.requireNonNull(gitTagParser),
-                Objects.requireNonNull(strategy))
+                Objects.requireNonNull(strategy),
+                Objects.requireNonNull(options)
+        )
     }
 
     @Override
@@ -40,7 +45,12 @@ class GitProjectVersionResolver <T extends ProjectVersion> implements ProjectVer
 
         // only increment version number if changes are present to last tagged commit
         GitCommit.isUntaggedOrDirty(descriptionParts) ?
-                strategy.nextVersion(currentVersion) :
+                strategy.nextVersion(currentVersion, options) :
                 currentVersion
+    }
+
+    @Override
+    VersioningStrategyOptions getOptions() {
+        options
     }
 }

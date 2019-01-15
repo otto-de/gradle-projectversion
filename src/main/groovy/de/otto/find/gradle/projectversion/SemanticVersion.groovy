@@ -66,6 +66,7 @@ class SemanticVersion extends ProjectVersion {
         if (major != that.major) return false
         if (minor != that.minor) return false
         if (patch != that.patch) return false
+        if (released != that.released) return false
 
         return true
     }
@@ -75,6 +76,7 @@ class SemanticVersion extends ProjectVersion {
         result = major
         result = 31 * result + minor
         result = 31 * result + patch
+        result = 31 * result + (released ? 1 : 0)
         return result
     }
 }

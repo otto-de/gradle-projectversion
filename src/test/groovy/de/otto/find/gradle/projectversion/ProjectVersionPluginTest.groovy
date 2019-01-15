@@ -6,6 +6,8 @@ import org.testng.annotations.Test
 
 import static de.otto.find.gradle.projectversion.FixedVersion.defaultVersion
 import static de.otto.find.gradle.projectversion.FixedVersion.fixed
+import static de.otto.find.gradle.projectversion.SemanticVersion.semantic
+import static de.otto.find.gradle.projectversion.SemanticVersion.sprintNumber
 import static org.hamcrest.MatcherAssert.assertThat
 import static org.hamcrest.Matchers.equalTo
 import static org.hamcrest.Matchers.instanceOf
@@ -37,10 +39,25 @@ class ProjectVersionPluginTest {
     void testSettingGitDerivedVersion() {
         Project project = ProjectBuilder.builder().withName("test").build()
         project.pluginManager.apply ProjectVersionPlugin
-        ProjectVersionPluginExtension versionPluginExtension = project.extensions.projectVersion
 
-        versionPluginExtension.deriveFromGitTag()
+        project.projectVersion {
+            deriveFromGitTag()
+        }
 
-        assertThat(project.version, instanceOf(SemanticVersion))
+        assertThat(project.version, equalTo(semantic(0, 1, 0, true)))
+    }
+
+    @Test
+    void testConfiguringGitDerivedVersion() {
+        Project project = ProjectBuilder.builder().withName("test").build()
+        project.pluginManager.apply ProjectVersionPlugin
+
+        project.projectVersion {
+            useSemanticVersioning() {
+                minimumMajorVersion = 3
+            }
+        }
+
+        assertThat(project.version, equalTo(semantic(3, 0, 0, true)))
     }
 }
