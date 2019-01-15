@@ -1,6 +1,7 @@
 package de.otto.find.gradle.projectversion
 
 import org.gradle.api.Project
+import org.gradle.api.tasks.TaskInputs
 import org.gradle.testfixtures.ProjectBuilder
 import org.testng.annotations.Test
 
@@ -20,7 +21,7 @@ class ProjectVersionPluginTest {
 
         def pluginExtension = project.extensions.findByType(ProjectVersionPluginExtension)
         assertThat(project.version, equalTo('unspecified'))
-        assertThat(pluginExtension.version, equalTo(defaultVersion()))
+        assertThat(pluginExtension.version.get(), equalTo(defaultVersion()))
     }
 
     @Test

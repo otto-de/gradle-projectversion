@@ -2,6 +2,7 @@ package de.otto.find.gradle.projectversion
 
 import org.gradle.api.Action
 import org.gradle.api.Project
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.internal.Actions
 import org.gradle.internal.Cast
@@ -22,16 +23,13 @@ class ProjectVersionPluginExtension {
 
     ProjectVersionPluginExtension(Project project) {
         this.project = project
-        version = project.objects.property(ProjectVersion)
-        gitCommit = project.objects.property(GitCommit)
-    }
-
-    GitCommit getGitCommit() {
-        gitCommit.getOrElse(gitCommit(project))
-    }
-
-    ProjectVersion getVersion() {
-        version.getOrElse(FixedVersion.defaultVersion())
+        ObjectFactory factory = project.objects
+        version = factory
+                .property(ProjectVersion)
+                .convention(FixedVersion.defaultVersion())
+        gitCommit = factory
+                .property(GitCommit)
+                .convention(gitCommit(project))
     }
 
     void setVersion(String version) {
@@ -50,7 +48,7 @@ class ProjectVersionPluginExtension {
     }
 
     private void apply() {
-        project.version = getVersion()
+        project.version = version.get()
     }
 
     private ProjectVersionResolver useProjectVersionResolver(ProjectVersionResolver resolver) {
@@ -91,7 +89,11 @@ class ProjectVersionPluginExtension {
 
 
     private ProjectVersionResolver getDefaultProjectVersionResolver() {
-        gitProjectVersionResolver(getGitCommit())
+        gitProjectVersionResolver(gitCommit.get())
     }
 
+    @Override
+    String toString() {
+        "ProjectVersionPluginExtension{project=$project, gitCommit=$gitCommit, version=$version, projectVersionResolver=$projectVersionResolver}";
+    }
 }

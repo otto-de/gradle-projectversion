@@ -70,4 +70,8 @@ class GitCommit {
         str.substring(prefix.length())
     }
 
+    @Override
+    String toString() {
+        return "GitCommit{vcsRoot=$vcsRoot}";
+    }
 }
