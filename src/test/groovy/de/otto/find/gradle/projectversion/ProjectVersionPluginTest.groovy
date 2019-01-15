@@ -7,10 +7,8 @@ import org.testng.annotations.Test
 import static de.otto.find.gradle.projectversion.FixedVersion.defaultVersion
 import static de.otto.find.gradle.projectversion.FixedVersion.fixed
 import static de.otto.find.gradle.projectversion.SemanticVersion.semantic
-import static de.otto.find.gradle.projectversion.SemanticVersion.sprintNumber
 import static org.hamcrest.MatcherAssert.assertThat
 import static org.hamcrest.Matchers.equalTo
-import static org.hamcrest.Matchers.instanceOf
 
 class ProjectVersionPluginTest {
 
@@ -41,7 +39,7 @@ class ProjectVersionPluginTest {
         project.pluginManager.apply ProjectVersionPlugin
 
         project.projectVersion {
-            deriveFromGitTag()
+            useSemanticVersioning()
         }
 
         assertThat(project.version, equalTo(semantic(0, 1, 0, true)))

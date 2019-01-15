@@ -9,11 +9,13 @@ import org.gradle.util.ConfigureUtil
 
 import javax.annotation.Nullable
 
+import static de.otto.find.gradle.projectversion.GitCommit.gitCommit
 import static de.otto.find.gradle.projectversion.GitProjectVersionResolver.gitProjectVersionResolver
 
 class ProjectVersionPluginExtension {
     private final Project project
 
+    final Property<GitCommit> gitCommit
     final Property<ProjectVersion> version
 
     private ProjectVersionResolver projectVersionResolver;
@@ -21,6 +23,11 @@ class ProjectVersionPluginExtension {
     ProjectVersionPluginExtension(Project project) {
         this.project = project
         version = project.objects.property(ProjectVersion)
+        gitCommit = project.objects.property(GitCommit)
+    }
+
+    GitCommit getGitCommit() {
+        gitCommit.getOrElse(gitCommit(project))
     }
 
     ProjectVersion getVersion() {
@@ -44,10 +51,6 @@ class ProjectVersionPluginExtension {
 
     private void apply() {
         project.version = getVersion()
-    }
-
-    void deriveFromGitTag() {
-        setVersion(getDefaultProjectVersionResolver())
     }
 
     private ProjectVersionResolver useProjectVersionResolver(ProjectVersionResolver resolver) {
@@ -88,7 +91,7 @@ class ProjectVersionPluginExtension {
 
 
     private ProjectVersionResolver getDefaultProjectVersionResolver() {
-        gitProjectVersionResolver(GitCommit.gitCommit(project))
+        gitProjectVersionResolver(getGitCommit())
     }
 
 }
