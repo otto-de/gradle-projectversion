@@ -19,8 +19,7 @@ class ProjectVersionPlugin implements Plugin<Project> {
             group = 'Help'
             description = 'Displays project version information'
 
-            gitCommit = project.projectVersion.gitCommit
-            version = project.projectVersion.version
+            buildInfo = project.projectVersion.buildInfo
         }
     }
 }

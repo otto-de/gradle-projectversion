@@ -1,6 +1,7 @@
 package de.otto.find.gradle.projectversion
 
 import org.gradle.api.Project
+import org.gradle.api.provider.MapProperty
 import org.gradle.testfixtures.ProjectBuilder
 import org.testng.annotations.Test
 
@@ -73,7 +74,7 @@ class ProjectVersionPluginTest {
     }
 
     @Test
-    void testReadConfiguringProperties() {
+    void testConfiguringBuildInfo() {
         Project project = ProjectBuilder.builder().withName("test").build()
         project.pluginManager.apply ProjectVersionPlugin
 
@@ -81,14 +82,23 @@ class ProjectVersionPluginTest {
             useSemanticVersioning() {
                 minimumMajorVersion = 3
             }
+
+            buildInfo 'custom', 'myValue'
+            buildInfo 'another', 'value'
         }
-
-        ProjectBuildInfo task = project.tasks.buildInfo as ProjectBuildInfo
-
         project.group = 'de.otto.find'
 
-        task.displayBuildInfo()
-//
-//        assertThat(version.get(), equalTo(semantic(3, 0, 0, true)))
+        MapProperty<String, String> info = project.projectVersion.buildInfo as MapProperty<String, String>
+
+        assertThat(info.get(), equalTo([
+                gradleVersion : '5.1.1',
+                name : 'test',
+                group : 'de.otto.find',
+                version : '3.0.0',
+                commit : '',
+                branch : '',
+                custom : 'myValue',
+                another : 'value'
+        ]))
     }
 }
