@@ -15,7 +15,7 @@ class ProjectVersionPlugin implements Plugin<Project> {
             gitCommit = project.projectVersion.gitCommit
         }
 
-        project.tasks.create('versionInfo', ProjectVersionInfo) {
+        project.tasks.create('buildInfo', ProjectBuildInfo) {
             group = 'Help'
             description = 'Displays project version information'
 
