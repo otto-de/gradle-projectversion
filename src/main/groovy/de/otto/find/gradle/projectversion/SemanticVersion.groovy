@@ -1,9 +1,5 @@
 package de.otto.find.gradle.projectversion
 
-import java.time.Duration
-import java.time.Instant
-
-
 class SemanticVersion extends ProjectVersion {
     private final int major
     private final int minor
@@ -28,10 +24,6 @@ class SemanticVersion extends ProjectVersion {
                 Integer.valueOf(versionParts[1]),
                 Integer.valueOf(versionParts[2]),
                 true)
-    }
-
-    static int sprintNumber(Instant sprintStart, Duration sprintLength = Duration.ofDays(14), int sprintNumber = 1) {
-        (int) (Duration.between(Instant.now(), sprintStart).toDays() / sprintLength.toDays()) + sprintNumber
     }
 
     SemanticVersion withMinimumMajor(int minMajor) {

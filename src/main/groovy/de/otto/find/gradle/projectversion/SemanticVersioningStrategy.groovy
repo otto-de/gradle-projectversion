@@ -24,7 +24,7 @@ class SemanticVersioningStrategy implements VersioningStrategy<SemanticVersion> 
         return branch == null || branch.isEmpty() || semanticVersioningOptions.defaultBranch == branch ?
                 oldVersion
                         .nextMinor()
-                        .withMinimumMajor(semanticVersioningOptions.minimumMajorVersion)
+                        .withMinimumMajor(semanticVersioningOptions.majorVersion)
                         .withReleased(!dirty) :
                 oldVersion
                         .nextPatch()

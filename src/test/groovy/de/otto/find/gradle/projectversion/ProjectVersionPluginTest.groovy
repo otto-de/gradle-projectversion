@@ -5,9 +5,13 @@ import org.gradle.api.provider.MapProperty
 import org.gradle.testfixtures.ProjectBuilder
 import org.testng.annotations.Test
 
+import java.time.Duration
+
 import static de.otto.find.gradle.projectversion.FixedVersion.defaultVersion
 import static de.otto.find.gradle.projectversion.FixedVersion.fixed
 import static de.otto.find.gradle.projectversion.SemanticVersion.semantic
+import static java.time.Instant.now
+import static java.time.temporal.ChronoUnit.DAYS
 import static org.hamcrest.MatcherAssert.assertThat
 import static org.hamcrest.Matchers.equalTo
 import static org.hamcrest.Matchers.instanceOf
@@ -66,11 +70,29 @@ class ProjectVersionPluginTest {
 
         project.projectVersion {
             useSemanticVersioning() {
-                minimumMajorVersion = 3
+                majorVersion = 3
             }
         }
 
         assertThat(project.version, equalTo(semantic(3, 0, 0, true)))
+    }
+
+    @Test
+    void testConfiguringSprintNumberBasedGitDerivedVersion() {
+        Project project = ProjectBuilder.builder().withName("test").build()
+        project.pluginManager.apply ProjectVersionPlugin
+
+        project.projectVersion {
+            useSemanticVersioning() {
+                useSprintNumber() {
+                    sprintStart = now().minus(50, DAYS)
+                    sprintLength = Duration.ofDays(20)
+                    sprintStartNumber = 10
+                }
+            }
+        }
+
+        assertThat(project.version, equalTo(semantic(12, 0, 0, true)))
     }
 
     @Test
@@ -80,7 +102,7 @@ class ProjectVersionPluginTest {
 
         project.projectVersion {
             useSemanticVersioning() {
-                minimumMajorVersion = 3
+                majorVersion = 3
             }
 
             buildInfo 'custom', 'myValue'

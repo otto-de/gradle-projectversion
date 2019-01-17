@@ -2,7 +2,7 @@ plugins {
     id 'java-gradle-plugin'
     id 'groovy'
     id 'com.gradle.plugin-publish' version '0.10.0'
-    id 'de.otto.find.project-version' version '0.2.0'
+    id 'de.otto.find.project-version' version '0.4.0'
 }
 
 group = 'de.otto.find'
