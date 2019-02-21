@@ -20,7 +20,7 @@ class GitProjectVersionResolver<T extends ProjectVersion> implements ProjectVers
         this.options = options
     }
 
-    static <T extends ProjectVersion> GitProjectVersionResolver<T> gitProjectVersionResolver(
+    static <T extends ProjectVersion> ProjectVersionResolver gitProjectVersionResolver(
             GitCommit gitCommit,
             GitTagParser<T> gitTagParser,
             VersioningStrategy<T> strategy,
@@ -33,12 +33,6 @@ class GitProjectVersionResolver<T extends ProjectVersion> implements ProjectVers
                         Objects.requireNonNull(strategy),
                         Objects.requireNonNull(options)) :
                 staticVersionResolver(gitCommit.parseAsVersion(gitTagParser), Objects.requireNonNull(options))
-
-        new GitProjectVersionResolver<>(gitCommit,
-                Objects.requireNonNull(gitTagParser),
-                Objects.requireNonNull(strategy),
-                Objects.requireNonNull(options)
-        )
     }
 
     static ProjectVersionResolver gitProjectVersionResolver(GitCommit gitCommit) {
