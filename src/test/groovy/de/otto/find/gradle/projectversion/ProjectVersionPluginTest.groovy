@@ -113,7 +113,7 @@ class ProjectVersionPluginTest {
         MapProperty<String, String> info = project.projectVersion.buildInfo as MapProperty<String, String>
 
         assertThat(info.get(), equalTo([
-                gradleVersion : '5.1.1',
+                gradleVersion : '5.6.2',
                 name : 'test',
                 group : 'de.otto.find',
                 version : '3.0.0',

@@ -59,7 +59,7 @@ class GitCommit {
 
     private List<String> describe() {
         // git describe yields something like v0.1.0-1-g768be9d
-        def description = "git describe --tags --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
+        def description = "git describe --tags --first-parent --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
         // initialize to v0.0.0-whoKnows if no tag yet
         return description.length() == 0 ?
                 ["0.0.0", "notset"] :
