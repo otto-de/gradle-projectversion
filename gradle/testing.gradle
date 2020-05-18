@@ -1,0 +1,13 @@
+
+configurations {
+    all {
+        exclude module: "junit"
+    }
+}
+
+tasks.withType(Test) {
+    useTestNG() {
+        excludeGroups 'bugs'
+    }
+    reports.html.destination = file("${reporting.baseDir}/${name}")
+}

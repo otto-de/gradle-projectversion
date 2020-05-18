@@ -1,5 +1,6 @@
 package de.otto.find.gradle.projectversion
 
+import org.assertj.core.api.Assertions
 import org.gradle.api.Project
 import org.gradle.api.provider.MapProperty
 import org.gradle.testfixtures.ProjectBuilder
@@ -12,9 +13,7 @@ import static de.otto.find.gradle.projectversion.FixedVersion.fixed
 import static de.otto.find.gradle.projectversion.SemanticVersion.semantic
 import static java.time.Instant.now
 import static java.time.temporal.ChronoUnit.DAYS
-import static org.hamcrest.MatcherAssert.assertThat
-import static org.hamcrest.Matchers.equalTo
-import static org.hamcrest.Matchers.instanceOf
+import static org.assertj.core.api.Assertions.assertThat
 
 class ProjectVersionPluginTest {
 
@@ -25,8 +24,11 @@ class ProjectVersionPluginTest {
         project.pluginManager.apply ProjectVersionPlugin
 
         def pluginExtension = project.extensions.findByType(ProjectVersionPluginExtension)
-        assertThat(project.version, equalTo('unspecified'))
-        assertThat(pluginExtension.version.get(), equalTo(defaultVersion()))
+
+        assertThat(project.version)
+                .isEqualTo('unspecified')
+        assertThat(pluginExtension.version.get())
+                .isEqualTo(defaultVersion())
     }
 
     @Test
@@ -37,8 +39,10 @@ class ProjectVersionPluginTest {
         def versionInfo = project.tasks.buildInfo
         def tagVersion = project.tasks.tagVersion
 
-        assertThat(versionInfo, instanceOf(ProjectBuildInfo))
-        assertThat(tagVersion, instanceOf(ProjectVersionTag))
+        assertThat(versionInfo)
+                .isInstanceOf(ProjectBuildInfo)
+        assertThat(tagVersion)
+                .isInstanceOf(ProjectVersionTag)
     }
 
     @Test
@@ -48,7 +52,8 @@ class ProjectVersionPluginTest {
 
         project.extensions.projectVersion.version '0.3.0'
 
-        assertThat(project.version, equalTo(fixed('0.3.0')))
+        assertThat(project.version)
+                .isEqualTo(fixed('0.3.0'))
     }
 
     @Test
@@ -60,7 +65,8 @@ class ProjectVersionPluginTest {
             useSemanticVersioning()
         }
 
-        assertThat(project.version, equalTo(semantic(0, 1, 0, true)))
+        assertThat(project.version)
+                .isEqualTo(semantic(0, 1, 0, true))
     }
 
     @Test
@@ -74,7 +80,8 @@ class ProjectVersionPluginTest {
             }
         }
 
-        assertThat(project.version, equalTo(semantic(3, 0, 0, true)))
+        assertThat(project.version)
+                .isEqualTo(semantic(3, 0, 0, true))
     }
 
     @Test
@@ -92,7 +99,8 @@ class ProjectVersionPluginTest {
             }
         }
 
-        assertThat(project.version, equalTo(semantic(12, 0, 0, true)))
+        assertThat(project.version)
+                .isEqualTo(semantic(12, 0, 0, true))
     }
 
     @Test
@@ -112,15 +120,16 @@ class ProjectVersionPluginTest {
 
         MapProperty<String, String> info = project.projectVersion.buildInfo as MapProperty<String, String>
 
-        assertThat(info.get(), equalTo([
-                gradleVersion : '5.6.2',
-                name : 'test',
-                group : 'de.otto.find',
-                version : '3.0.0',
-                commit : '',
-                branch : '',
-                custom : 'myValue',
-                another : 'value'
-        ]))
+        assertThat(info.get())
+                .isEqualTo([
+                        gradleVersion: '6.4.1',
+                        name         : 'test',
+                        group        : 'de.otto.find',
+                        version      : '3.0.0',
+                        commit       : '',
+                        branch       : '',
+                        custom       : 'myValue',
+                        another      : 'value'
+                ])
     }
 }
