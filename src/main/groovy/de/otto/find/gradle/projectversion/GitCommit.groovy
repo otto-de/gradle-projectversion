@@ -7,6 +7,7 @@ class GitCommit {
 
     private final File vcsRoot
 
+    String branch
     List<String> description
 
     private GitCommit(File vcsRoot) {
@@ -35,7 +36,9 @@ class GitCommit {
     }
 
     String getBranch() {
-        "git rev-parse --abbrev-ref HEAD".execute([], vcsRoot).text.trim()
+        branch == null ?
+                this.branch = revParseBranch() :
+                branch
     }
 
     List<String> getDescription() {
@@ -48,6 +51,12 @@ class GitCommit {
         gitTagParser.parseAsVersion getDescription()[0]
     }
 
+    int getDistance() {
+        isUntaggedOrDirty()
+                ? Integer.valueOf(getDescription()[1]) + (isDirty() ? 1 : 0)
+                : 0
+    }
+
     boolean isDirty() {
         List<String> descriptionParts = getDescription()
         return descriptionParts[descriptionParts.size() - 1] == 'dirty'
@@ -57,12 +66,16 @@ class GitCommit {
         return getDescription().size() > 1
     }
 
+    private String revParseBranch() {
+        "git rev-parse --abbrev-ref HEAD".execute([], vcsRoot).text.trim()
+    }
+
     private List<String> describe() {
         // git describe yields something like v0.1.0-1-g768be9d
         def description = "git describe --tags --first-parent --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
-        // initialize to v0.0.0-whoKnows if no tag yet
+        // initialize to v0.0.0-1 if no tag yet
         return description.length() == 0 ?
-                ["0.0.0", "notset"] :
+                ["0.0.0", "1"] :
                 trimPrefix(description, VERSION_PREFIX).tokenize("-")
     }
 

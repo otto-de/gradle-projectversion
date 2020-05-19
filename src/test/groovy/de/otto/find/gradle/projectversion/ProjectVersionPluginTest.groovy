@@ -70,6 +70,21 @@ class ProjectVersionPluginTest {
     }
 
     @Test
+    void testSettingGitDerivedVersionNoSquash() {
+        Project project = ProjectBuilder.builder().withName("test").build()
+        project.pluginManager.apply ProjectVersionPlugin
+
+        project.projectVersion {
+            useSemanticVersioning() {
+                squash = false
+            }
+        }
+
+        assertThat(project.version)
+                .isEqualTo(semantic(0, 1, 0, true))
+    }
+
+    @Test
     void testConfiguringGitDerivedVersion() {
         Project project = ProjectBuilder.builder().withName("test").build()
         project.pluginManager.apply ProjectVersionPlugin

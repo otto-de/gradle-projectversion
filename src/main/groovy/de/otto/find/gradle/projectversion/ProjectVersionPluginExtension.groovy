@@ -15,7 +15,6 @@ import javax.annotation.Nullable
 import static de.otto.find.gradle.projectversion.GitCommit.gitCommit
 import static de.otto.find.gradle.projectversion.GitProjectVersionResolver.gitProjectVersionResolver
 
-@SuppressWarnings("UnstableApiUsage")
 class ProjectVersionPluginExtension {
     private final Project project
 

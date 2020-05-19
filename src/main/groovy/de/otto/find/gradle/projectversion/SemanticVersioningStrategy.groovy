@@ -5,16 +5,23 @@ import org.gradle.internal.Cast
 class SemanticVersioningStrategy implements VersioningStrategy<SemanticVersion> {
 
     final String branch
+    final int distance
     final boolean dirty
 
-    SemanticVersioningStrategy(String branch, boolean dirty) {
+    SemanticVersioningStrategy(String branch, int distance, boolean dirty) {
         this.branch = branch
+        this.distance = distance
         this.dirty = dirty
     }
 
+    static VersioningStrategy<SemanticVersion> semanticVersioningStrategy(String branch, int distance, boolean dirty) {
+        new SemanticVersioningStrategy(branch, distance, dirty)
+    }
+
     static VersioningStrategy<SemanticVersion> semanticVersioningStrategy(GitCommit gitCommit) {
-        new SemanticVersioningStrategy(
+        semanticVersioningStrategy(
                 gitCommit.branch,
+                gitCommit.distance,
                 gitCommit.dirty)
     }
 
@@ -23,11 +30,11 @@ class SemanticVersioningStrategy implements VersioningStrategy<SemanticVersion> 
         def semanticVersioningOptions = Cast.<SemanticVersioningOptions> uncheckedCast(options)
         return branch == null || branch.isEmpty() || semanticVersioningOptions.defaultBranch == branch ?
                 oldVersion
-                        .nextMinor()
+                        .nextMinor(semanticVersioningOptions.squash ? 1 : distance)
                         .withMinimumMajor(semanticVersioningOptions.majorVersion)
                         .withReleased(!dirty) :
                 oldVersion
-                        .nextPatch()
+                        .nextPatch(semanticVersioningOptions.squash ? 1 : distance)
                         .withReleased(!dirty)
     }
 }

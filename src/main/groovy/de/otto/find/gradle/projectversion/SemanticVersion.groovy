@@ -32,12 +32,12 @@ class SemanticVersion extends ProjectVersion {
                 this
     }
 
-    SemanticVersion nextMinor() {
-        new SemanticVersion(major, minor + 1, 0, false)
+    SemanticVersion nextMinor(int distance = 1) {
+        new SemanticVersion(major, minor + distance, 0, false)
     }
 
-    SemanticVersion nextPatch() {
-        new SemanticVersion(major, minor, patch + 1, false)
+    SemanticVersion nextPatch(int distance = 1) {
+        new SemanticVersion(major, minor, patch + distance, false)
     }
 
     SemanticVersion withReleased(boolean status) {

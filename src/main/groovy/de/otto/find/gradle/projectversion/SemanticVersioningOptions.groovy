@@ -12,6 +12,7 @@ import static java.util.Objects.requireNonNull
 class SemanticVersioningOptions extends VersioningStrategyOptions {
 
     int majorVersion = 0
+    boolean squash = false
     String defaultBranch = 'master'
 
     private static <T extends SprintNumber> int resolveSprintNumber(
