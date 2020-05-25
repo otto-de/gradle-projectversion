@@ -56,6 +56,27 @@ class GitCommitTest {
         Project project = ProjectBuilder.builder().withName("test").build();
         GitCommit gitCommit = GitCommit.gitCommit(project);
 
+        gitCommit.description = ['0.8.0', 'dirty']
+
+        Assertions.assertThat(gitCommit)
+                .extracting({ g -> g.distance })
+                .isEqualTo(1)
+        Assertions.assertThat(gitCommit)
+                .extracting({ g -> g.untaggedOrDirty })
+                .isEqualTo(true)
+        Assertions.assertThat(gitCommit)
+                .extracting({ g -> g.dirty })
+                .isEqualTo(true)
+        Assertions.assertThat(gitCommit)
+                .extracting({ g -> g.parseAsVersion({ s -> semantic(s) }) })
+                .isEqualTo(semantic(0, 8, 0, true))
+    }
+
+    @Test
+    void testUntaggedDirtyWorkspace() {
+        Project project = ProjectBuilder.builder().withName("test").build();
+        GitCommit gitCommit = GitCommit.gitCommit(project);
+
         gitCommit.description = ['0.8.0', '2', 'gf133199', 'dirty']
 
         Assertions.assertThat(gitCommit)

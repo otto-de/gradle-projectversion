@@ -52,9 +52,9 @@ class GitCommit {
     }
 
     int getDistance() {
-        isUntaggedOrDirty()
+        getDescription().size() > 2
                 ? Integer.valueOf(getDescription()[1]) + (isDirty() ? 1 : 0)
-                : 0
+                : (isDirty() ? 1 : 0)
     }
 
     boolean isDirty() {
@@ -75,7 +75,7 @@ class GitCommit {
         def description = "git describe --tags --first-parent --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
         // initialize to v0.0.0-1 if no tag yet
         return description.length() == 0 ?
-                ["0.0.0", "1"] :
+                ["0.0.0", "1", "unknown"] :
                 trimPrefix(description, VERSION_PREFIX).tokenize("-")
     }
 
