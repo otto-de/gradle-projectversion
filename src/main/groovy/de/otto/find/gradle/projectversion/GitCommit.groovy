@@ -43,7 +43,7 @@ class GitCommit {
 
     List<String> getDescription() {
         description == null ?
-                this.description = describe() :
+                this.description = describe(VERSION_PREFIX) :
                 description
     }
 
@@ -70,13 +70,16 @@ class GitCommit {
         "git rev-parse --abbrev-ref HEAD".execute([], vcsRoot).text.trim()
     }
 
-    private List<String> describe() {
+    private List<String> describe(String versionPrefix, boolean firstParent = false) {
         // git describe yields something like v0.1.0-1-g768be9d
-        def description = "git describe --tags --first-parent --match ${VERSION_PREFIX}* --dirty".execute([], vcsRoot).text.trim()
+        def firstParentFlag = firstParent ?
+                " --first-parent" :
+                ""
+        def description = "git describe --tags$firstParentFlag --match $versionPrefix* --dirty".execute([], vcsRoot).text.trim()
         // initialize to v0.0.0-1 if no tag yet
         return description.length() == 0 ?
                 ["0.0.0", "1", "unknown"] :
-                trimPrefix(description, VERSION_PREFIX).tokenize("-")
+                trimPrefix(description, versionPrefix).tokenize("-")
     }
 
     private static String trimPrefix(String str, String prefix) {
