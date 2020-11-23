@@ -137,7 +137,7 @@ class ProjectVersionPluginTest {
 
         assertThat(info.get())
                 .isEqualTo([
-                        gradleVersion: '6.4.1',
+                        gradleVersion: '6.7.1',
                         name         : 'test',
                         group        : 'de.otto.find',
                         version      : '3.0.0',
