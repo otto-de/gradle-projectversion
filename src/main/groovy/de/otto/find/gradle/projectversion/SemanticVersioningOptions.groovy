@@ -13,7 +13,7 @@ class SemanticVersioningOptions extends VersioningStrategyOptions {
 
     int majorVersion = 0
     boolean squash = false
-    String defaultBranch = 'master'
+    String defaultBranch = 'main'
 
     private static <T extends SprintNumber> int resolveSprintNumber(
             T sprintNumber,

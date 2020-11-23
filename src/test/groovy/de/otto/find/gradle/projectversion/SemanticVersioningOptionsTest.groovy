@@ -14,7 +14,7 @@ class SemanticVersioningOptionsTest {
 
         Assertions.assertThat(options)
                 .extracting({ o -> o.defaultBranch })
-                .isEqualTo('master')
+                .isEqualTo('main')
         Assertions.assertThat(options)
                 .extracting({ o -> o.squash })
                 .isEqualTo(false)
